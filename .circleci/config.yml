@@ -3,6 +3,13 @@ orbs:
   slack: circleci/slack@4.3.3
 
 commands:
+  slack-error-notify:
+    description: Notify on Slack when fail a step
+    steps:
+      - slack/notify:
+          event: fail
+          mentions: "@EngineeringTeam"
+          template: basic_fail_1
   # destroy-environment:
   #   description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
   #   parameters:
@@ -35,27 +42,6 @@ commands:
   #           fi
 
 jobs:
-  notify:
-    docker:
-      - image: "cimg/base:stable"
-    steps:
-      - slack/notify:
-          custom: |
-            {
-              "blocks": [
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "plain_text",
-                      "text": "*This is a text notification*",
-                      "emoji": true
-                    }
-                  ]
-                }
-              ]
-            }
-          event: always
   build-frontend:
     docker:
       - image: circleci/node:13.8.0
@@ -143,6 +129,7 @@ jobs:
           command: |
             cd backend
             npm audit --audit-level=critical
+      - slack-error-notify:
 
   # deploy-infrastructure:
   #   docker:
@@ -312,8 +299,6 @@ jobs:
 workflows:
   default:
     jobs:
-      - notify:
-          context: slack-secrets
       - build-frontend
       - build-backend
       - test-frontend:
