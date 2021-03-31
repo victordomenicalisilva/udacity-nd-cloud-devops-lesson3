@@ -75,6 +75,10 @@ jobs:
       - save_cache:
           paths: [backend/node_modules]
           key: backend-build
+      - slack/notify:
+          event: fail
+          mentions: "@EngineeringTeam"
+          template: basic_fail_1
 
   test-frontend:
     docker:
@@ -129,7 +133,6 @@ jobs:
           command: |
             cd backend
             npm audit --audit-level=critical
-      - slack-error-notify:
 
   # deploy-infrastructure:
   #   docker:
