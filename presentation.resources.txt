@@ -1,0 +1,3 @@
+[studies]
+https://www.ibm.com/security/data-breach
+https://www.celerity.com/the-true-cost-of-a-software-bug#:~:text=To%20illustrate%3A%20if%20a%20bug,the%20cost%20could%20be%20%2410%2C000.
