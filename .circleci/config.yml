@@ -171,28 +171,28 @@ jobs:
     steps:
       - checkout
       - run: yum -y install tar gzip
-      - run: echo ${UDAPEOPLE_WORKFLOW_ID}, $UDAPEOPLE_WORKFLOW_ID
+      - run: echo ${CIRCLE_WORKFLOW_ID:0:7}
       - run:
           name: Ensure back-end infrastructure exists
           command: |
             aws cloudformation deploy \
               --template-file .circleci/files/backend.yml \
               --tags project=udapeople-backend \
-              --stack-name "udapeople-backend-${UDAPEOPLE_WORKFLOW_ID}" \
-              --parameter-overrides ID="${UDAPEOPLE_WORKFLOW_ID}"
+              --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"
       - run:
           name: Ensure front-end infrastructure exist
           command: |
             aws cloudformation deploy \
               --template-file .circleci/files/frontend.yml \
               --tags project=udapeople-frontend \
-              --stack-name "udapeople-frontend-${UDAPEOPLE_WORKFLOW_ID}" \
-              --parameter-overrides ID="${UDAPEOPLE_WORKFLOW_ID}"
+              --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"
       - run:
           name: Add back-end ip to ansible inventory
           command: |
             aws ec2 describe-instances \
-            -- filters "Name=tag:Name, Values=udapeople-backend" \
+            -- filters "Name=tag:Name, Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
             -- query 'Reservations[*].Instances[*].PublicIpAddress' \
             -- output text >> .circleci/ansible/inventory.txt
       - persist_to_workspace:
@@ -200,7 +200,7 @@ jobs:
           paths:
             - project/.circleci/ansible/inventory.txt
       - destroy-environment:
-          workflow_id: "${UDAPEOPLE_WORKFLOW_ID}"
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
           event: on_fail
 
   # configure-infrastructure:
