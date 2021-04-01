@@ -375,14 +375,8 @@ workflows:
     jobs:
       - build-frontend:
           context: slack-secrets
-          filters:
-            branches:
-              only: [main]
       - build-backend:
           context: slack-secrets
-          filters:
-            branches:
-              only: [qqcoisa]
       - test-frontend:
           requires: [build-frontend]
           context: slack-secrets
