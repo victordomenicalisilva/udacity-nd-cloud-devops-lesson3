@@ -171,7 +171,6 @@ jobs:
     steps:
       - checkout
       - run: yum -y install tar gzip
-      - run: echo ${CIRCLE_WORKFLOW_ID:0:7}
       - run:
           name: Ensure back-end infrastructure exists
           command: |
@@ -180,6 +179,15 @@ jobs:
               --tags project=udapeople-backend \
               --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
               --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"
+      - run:
+          name: Make sure the EC2 instance has your back-end port opened up to public traffic on port 3030
+          command: |
+            export BACKEND_IP=$( \
+            aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+            --output text)
+            curl "$BACKEND_IP:3030"
       - run:
           name: Ensure front-end infrastructure exist
           command: |
@@ -191,10 +199,22 @@ jobs:
       - run:
           name: Add back-end ip to ansible inventory
           command: |
+            export BACKEND_IP=$( \
             aws ec2 describe-instances \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-            --output text >> .circleci/ansible/inventory.txt
+            --output text)
+            echo $BACKEND_IP >> .circleci/ansible/inventory.txt
+      - run:
+          name: Add back-end IP to MemStash
+          command: |
+            export BACKEND_IP=$( \
+            aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+            --output text)
+            curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
+            --request PUT --data "$BACKEND_IP" ${MEMSTASH_BASE_URL}/udapeople-backend-ip-${CIRCLE_WORKFLOW_ID:0:7}
       - persist_to_workspace:
           root: ~/
           paths:
@@ -209,22 +229,42 @@ jobs:
 
   # configure-infrastructure:
   #   docker:
-  #     # Docker image here that supports Ansible
+  #     - image: python:3.7-alpine3.11
   #   steps:
-  #     # Checkout code from git
-  #     # Add ssh keys with fingerprint
-  #     # attach workspace
+  #     - checkout
+  #     - add_ssh_keys:
+  #         fingerprints: ["97:dd:06:8d:39:8c:f1:7b:b6:36:e0:51:0c:4d:78:f0"]
+  #     - attach_workspace:
+  #         at: ~/
+  #     - run:
+  #         name: Add .env vars to backend
+  #         command: |
+  #           echo ENVIRONMENT=production > backend/.env
+  #           echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> backend/.env
+  #           echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> backend/.env
+  #           echo TYPEORM_HOST=$TYPEORM_HOST >> backend/.env
+  #           echo TYPEORM_PORT=$TYPEORM_PORT >> backend/.env
+  #           echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> backend/.env
+  #           echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> backend/.env
+  #           echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> backend/.env
+  #           echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> "backend/.env"
+  #           echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> "backend/.env"
   #     - run:
   #         name: Install dependencies
   #         command: |
-  #           # Your code here
-  #           exit 1
+  #           apk add --update ansible
   #     - run:
   #         name: Configure server
   #         command: |
-  #           # Your code here
-  #           exit 1
-  #     # Here's where you will add some code to rollback on failure
+  #           cd ~/project/.circleci/ansible/
+  #           ansible-playbook -i inventory.txt configure-server.yml
+  #     - destroy-environment:
+  #         workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
+  #         event: on_fail
+  #     - slack/notify:
+  #         channel: circleci
+  #         event: fail
+  #         template: basic_fail_1
 
   # run-migrations:
   #   docker:
@@ -365,6 +405,7 @@ workflows:
               only: [main]
       # - configure-infrastructure:
       #     requires: [deploy-infrastructure]
+      #     context: slack-secrets
       # - run-migrations:
       #     requires: [configure-infrastructure]
       # - deploy-frontend:
