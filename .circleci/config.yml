@@ -401,9 +401,9 @@ workflows:
           filters:
             branches:
               only: [main]
-      # - configure-infrastructure:
-      #     requires: [deploy-infrastructure]
-      #     context: slack-secrets
+      - configure-infrastructure:
+          requires: [deploy-infrastructure]
+          context: slack-secrets
       # - run-migrations:
       #     requires: [configure-infrastructure]
       # - deploy-frontend:
