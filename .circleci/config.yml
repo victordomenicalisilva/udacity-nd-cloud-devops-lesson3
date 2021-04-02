@@ -8,6 +8,7 @@ commands:
     parameters:
       workflow_id:
         type: string
+        default: "${CIRCLE_SHA1:0:7}"
       event:
         type: string
         default: "on_fail"
@@ -30,6 +31,7 @@ commands:
     parameters:
       workflow_id:
         type: string
+        default: "${CIRCLE_SHA1:0:7}"
       event:
         type: string
         default: "on_fail"
@@ -186,12 +188,13 @@ jobs:
             --filters "Name=tag:Name,Values=backend-${CIRCLE_SHA1:0:7}" \
             --output text)
             curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
-            --request PUT --data "$BACKEND_IP" ${MEMSTASH_BASE_URL}/udapeople-backend-ip-${CIRCLE_SHA1:0:7}
+            --request PUT --data "$BACKEND_IP" $MEMSTASH_BASE_URL/udapeople-backend-ip-${CIRCLE_SHA1:0:7}
       - run:
           name: Add .env to backend
           command: |
             cd ./backend
             touch .env
+            echo NODE_ENV=production
             echo ENVIRONMENT=production
             echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> ./.env
             echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> ./.env
@@ -207,9 +210,7 @@ jobs:
           paths:
             - .circleci/ansible/inventory.txt
             - backend/
-      - destroy-environment:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
+      - destroy-environment
       - alert_slack_on_failure
 
   configure-infrastructure:
@@ -231,9 +232,7 @@ jobs:
           command: |
             cd .circleci/ansible/
             ansible-playbook -i inventory.txt configure-server.yml
-      - destroy-environment:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
+      - destroy-environment
       - alert_slack_on_failure
 
   run-migrations:
@@ -262,12 +261,8 @@ jobs:
               curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
               --request PUT --data "0" $MEMSTASH_BASE_URL/udapeople-migration-status-${CIRCLE_SHA1:0:7}
             fi
-      - revert-migrations:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
-      - destroy-environment:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
+      - revert-migrations
+      - destroy-environment
       - alert_slack_on_failure
 
   deploy-frontend:
@@ -293,12 +288,8 @@ jobs:
             npm i
             npm run build
             aws s3 cp ./dist s3://udapeople-"${CIRCLE_SHA1:0:7}" --recursive
-      - revert-migrations:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
-      - destroy-environment:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
+      - revert-migrations
+      - destroy-environment
       - alert_slack_on_failure
 
   deploy-backend:
@@ -316,6 +307,7 @@ jobs:
           name: Install dependencies
           command: |
             apk add --update ansible curl nodejs npm curl openssh-client
+            pip install awscli
       - run:
           name: Prepare backend
           command: |
@@ -325,12 +317,8 @@ jobs:
           command: |
             cd .circleci/ansible
             ansible-playbook -i inventory.txt deploy-backend.yml
-      - revert-migrations:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
-      - destroy-environment:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
+      - revert-migrations
+      - destroy-environment
       - alert_slack_on_failure
 
   smoke-test:
@@ -347,73 +335,69 @@ jobs:
           command: |
             BACKEND_IP=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/udapeople-backend-ip-${CIRCLE_SHA1:0:7})
             BACKEND_URL=$BACKEND_IP:3030/api/status
-            curl -s $URL
+            curl -s $BACKEND_URL
       - run:
           name: Frontend smoke test.
           command: |
-            URL="http://udapeople-${CIRCLE_SHA1:0:7}.s3-website-us-west-2.amazonaws.com"
+            URL="http://udapeople-${CIRCLE_SHA1:0:7}.s3-website-us-east-1.amazonaws.com"
             if curl -s ${URL} | grep "Welcome"
              then
                return 1
              else
                return 0
              fi
-      - revert-migrations:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
-      - destroy-environment:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
+      - revert-migrations
+      - destroy-environment
       - alert_slack_on_failure
 
-  cloudfront-update:
-    docker:
-      - image: amazon/aws-cli
-    steps:
-      - checkout
-      - run:
-          name: Install dependencies
-          command: |
-            yum -y install tar gzip
-      - run:
-          name: Update cloudfront distribution
-          command: |
-            aws cloudformation list-exports \
-            --query "Exports[?Name=='WorkflowID'].Value" \
-            --no-paginate \
-            --output text > ./.circleci/ansible/originalWorkflowID.txt
-            if [ -s "./.circleci/ansible/originalWorkflowID.txt" ]
-            then
-              cat ./.circleci/ansible/originalWorkflowID.txt
-              originalWorkflowID=`cat ./.circleci/ansible/originalWorkflowID.txt`
-            else
-              echo "New stack will be created"
-            fi
-            if [ -n "$originalWorkflowID" ]
-            then
-              echo $originalWorkflowID
-              StackOption=update-stack
-              StackName=udapeople-$originalWorkflowID
-            else
-              StackOption=create-stack
-              StackName=udapeople-${CIRCLE_SHA1:0:7}
-            fi
-            aws cloudformation $StackOption \
-            --stack-name $StackName \
-            --template-body file://./.circleci/files/cloudfront.yml \
-            --parameter ParameterKey=WorkflowID,ParameterValue=${CIRCLE_SHA1:0:7} \
-            --tags Key=Name,Value=Udapeople-production-${CIRCLE_SHA1:0:7}
-      - persist_to_workspace:
-          root: .circleci/ansible/
-          paths:
-            - originalWorkflowID.txt
-      - revert-migrations:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
-      - destroy-environment:
-          workflow_id: "${CIRCLE_SHA1:0:7}"
-          event: on_fail
-      - alert_slack_on_failure
+  # cloudfront-update:
+  #   docker:
+  #     - image: amazon/aws-cli
+  #   steps:
+  #     - checkout
+  #     - run:
+  #         name: Install dependencies
+  #         command: |
+  #           yum -y install tar gzip
+  #     - run:
+  #         name: Update cloudfront distribution
+  #         command: |
+  #           aws cloudformation list-exports \
+  #           --query "Exports[?Name=='WorkflowID'].Value" \
+  #           --no-paginate \
+  #           --output text > ./.circleci/ansible/originalWorkflowID.txt
+  #           if [ -s "./.circleci/ansible/originalWorkflowID.txt" ]
+  #           then
+  #             cat ./.circleci/ansible/originalWorkflowID.txt
+  #             originalWorkflowID=`cat ./.circleci/ansible/originalWorkflowID.txt`
+  #           else
+  #             echo "New stack will be created"
+  #           fi
+  #           if [ -n "$originalWorkflowID" ]
+  #           then
+  #             echo $originalWorkflowID
+  #             StackOption=update-stack
+  #             StackName=udapeople-$originalWorkflowID
+  #           else
+  #             StackOption=create-stack
+  #             StackName=udapeople-${CIRCLE_SHA1:0:7}
+  #           fi
+  #           aws cloudformation $StackOption \
+  #           --stack-name $StackName \
+  #           --template-body file://./.circleci/files/cloudfront.yml \
+  #           --parameter ParameterKey=WorkflowID,ParameterValue=${CIRCLE_SHA1:0:7} \
+  #           --tags Key=Name,Value=Udapeople-production-${CIRCLE_SHA1:0:7}
+  #     - persist_to_workspace:
+  #         root: .circleci/ansible/
+  #         paths:
+  #           - originalWorkflowID.txt
+  #     - revert-migrations:
+  #         workflow_id: "${CIRCLE_SHA1:0:7}"
+  #         event: on_fail
+  #     - destroy-environment:
+  #         workflow_id: "${CIRCLE_SHA1:0:7}"
+  #         event: on_fail
+  #     - alert_slack_on_failure
 
 # cleanup:
 #   docker:
@@ -437,24 +421,24 @@ jobs:
 workflows:
   default:
     jobs:
-      # - build-frontend:
-      #     context: slack-secrets
-      # - build-backend:
-      #     context: slack-secrets
-      # - test-frontend:
-      #     requires: [build-frontend]
-      #     context: slack-secrets
-      # - test-backend:
-      #     requires: [build-backend]
-      #     context: slack-secrets
-      # - scan-backend:
-      #     requires: [build-backend]
-      #     context: slack-secrets
-      # - scan-frontend:
-      #     requires: [build-frontend]
-      #     context: slack-secrets
+      - build-frontend:
+          context: slack-secrets
+      - build-backend:
+          context: slack-secrets
+      - test-frontend:
+          requires: [build-frontend]
+          context: slack-secrets
+      - test-backend:
+          requires: [build-backend]
+          context: slack-secrets
+      - scan-backend:
+          requires: [build-backend]
+          context: slack-secrets
+      - scan-frontend:
+          requires: [build-frontend]
+          context: slack-secrets
       - deploy-infrastructure:
-          # requires: [test-frontend, test-backend, scan-frontend, scan-backend]
+          requires: [test-frontend, test-backend, scan-frontend, scan-backend]
           context: slack-secrets
           filters:
             branches:
@@ -462,19 +446,18 @@ workflows:
       - configure-infrastructure:
           requires: [deploy-infrastructure]
           context: slack-secrets
-      # - run-migrations:
-      #     requires: [configure-infrastructure]
-      #     context: slack-secrets
-      # - deploy-frontend:
-      #     requires: [run-migrations]
-      #     context: slack-secrets
-      - deploy-backend:
-          # requires: [run-migrations]
+      - run-migrations:
           requires: [configure-infrastructure]
           context: slack-secrets
-      # - smoke-test:
-      #     requires: [deploy-backend, deploy-frontend]
-      #     context: slack-secrets
+      - deploy-frontend:
+          requires: [run-migrations]
+          context: slack-secrets
+      - deploy-backend:
+          requires: [run-migrations]
+          context: slack-secrets
+      - smoke-test:
+          requires: [deploy-backend, deploy-frontend]
+          context: slack-secrets
       # - cloudfront-update:
       #     requires: [smoke-test]
       #     context: slack-secrets
