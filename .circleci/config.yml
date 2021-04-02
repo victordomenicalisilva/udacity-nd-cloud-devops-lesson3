@@ -25,24 +25,26 @@ commands:
             aws s3 rm s3://udapeople-<< parameters.workflow_id >> --recursive
             aws cloudformation delete-stack --stack-name udapeople-frontend-<< parameters.workflow_id >>
 
-  # revert-migrations:
-  #   description: Revert the last migration if successfully run in the current workflow.
-  #   parameters:
-  #     # Add parameter here
-  #   steps:
-  #     - run:
-  #         name: Revert migrations
-  #         # Add when this will run
-  #         command: |
-  #           # Curl command here to see if there was a successful migration associated with the workflow id, store result in SUCCESS variable
-  #           SUCCESS = 1
-  #           if(( $SUCCESS==1 ));
-  #           then
-  #           #  cd ~/project/backend
-  #           #  npm install
-  #           #  Add revert code here. You can find this in the Getting Started section.
-  #             exit 1
-  #           fi
+  revert-migrations:
+    description: Revert the last migration if successfully run in the current workflow.
+    parameters:
+      workflow_id:
+        type: string
+      event:
+        type: string
+        default: "on_fail"
+    steps:
+      - run:
+          name: Revert migrations
+          when: << parameters.event >>
+          command: |
+            SUCCESS=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/udapeople-migration-status-<< parameters.id >>)
+            if(( $SUCCESS==1 ));
+            then
+              cd ./backend
+              npm i
+              npm run migrations:revert
+            fi
 
 jobs:
   build-frontend:
@@ -171,15 +173,6 @@ jobs:
               --tags project=udapeople-backend \
               --stack-name "udapeople-backend-${CIRCLE_SHA1:0:7}" \
               --parameter-overrides ID="${CIRCLE_SHA1:0:7}"
-      # - run:
-      #     name: Make sure the EC2 instance has your back-end port opened up to public traffic on port 3030
-      #     command: |
-      #       export BACKEND_IP=$( \
-      #       aws ec2 describe-instances \
-      #       --query 'Reservations[*].Instances[*].PublicIpAddress' \
-      #       --filters "Name=tag:Name,Values=backend-${CIRCLE_SHA1:0:7}" \
-      #       --output text)
-      #       curl "$BACKEND_IP:3030"
       - run:
           name: Ensure front-end infrastructure exist
           command: |
@@ -201,11 +194,6 @@ jobs:
       - run:
           name: Add back-end IP to MemStash
           command: |
-            export BACKEND_IP=$( \
-            aws ec2 describe-instances \
-            --query 'Reservations[*].Instances[*].PublicIpAddress' \
-            --filters "Name=tag:Name,Values=backend-${CIRCLE_SHA1:0:7}" \
-            --output text)
             curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
             --request PUT --data "$BACKEND_IP" ${MEMSTASH_BASE_URL}/udapeople-backend-ip-${CIRCLE_SHA1:0:7}
       - persist_to_workspace:
@@ -230,19 +218,6 @@ jobs:
       - attach_workspace:
           at: ~/
       - run:
-          name: Add environment variables to backend
-          command: |
-            echo ENVIRONMENT=production > backend/.env
-            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> backend/.env
-            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> backend/.env
-            echo TYPEORM_HOST=$TYPEORM_HOST >> backend/.env
-            echo TYPEORM_PORT=$TYPEORM_PORT >> backend/.env
-            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> backend/.env
-            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> backend/.env
-            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> backend/.env
-            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> "backend/.env"
-            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> "backend/.env"
-      - run:
           name: Install dependencies
           command: |
             apk add --update ansible
@@ -259,22 +234,39 @@ jobs:
           event: fail
           template: basic_fail_1
 
-  # run-migrations:
-  #   docker:
-  #     # Docker image here that supports NodeJS
-  #   steps:
-  #     # Checkout code from git
-  #     - run:
-  #         name: Run migrations
-  #         command: |
-  #           # Your code here
-  #           exit 1
-  #     - run:
-  #         name: Send migration results to memstash
-  #         command: |
-  #           # Your code here
-  #           exit 1
-  #     # Here's where you will add some code to rollback on failure
+  run-migrations:
+    docker:
+      - image: circleci/node:13.8.0
+    steps:
+      - checkout
+      - run:
+          name: Run migrations
+          command: |
+            cd ./backend
+            npm i
+            touch .env
+            echo ENVIRONMENT=production
+            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> ./.env
+            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> ./.env
+            echo TYPEORM_HOST=$TYPEORM_HOST >> ./.env
+            echo TYPEORM_PORT=$TYPEORM_PORT >> ./.env
+            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> ./.env
+            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> ./.env
+            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> ./.env
+            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> ./.env
+            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> ./.env
+            export MIGRATION_STATUS=$(npm run migrations)
+      - run:
+          name: Send migration results to memstash
+          command: |
+            curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
+            --request PUT --data "$MIGRATION_STATUS" $MEMSTASH_BASE_URL/udapeople-migration-status-${CIRCLE_SHA1:0:7}
+      - revert-migrations
+      - destroy-environment
+      - slack/notify:
+          channel: circleci
+          event: fail
+          template: basic_fail_1
 
   # deploy-frontend:
   #   docker:
@@ -399,8 +391,9 @@ workflows:
       - configure-infrastructure:
           requires: [deploy-infrastructure]
           context: slack-secrets
-      # - run-migrations:
-      #     requires: [configure-infrastructure]
+      - run-migrations:
+          requires: [configure-infrastructure]
+          context: slack-secrets
       # - deploy-frontend:
       #     requires: [run-migrations]
       # - deploy-backend:
