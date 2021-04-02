@@ -38,7 +38,7 @@ commands:
           name: Revert migrations
           when: << parameters.event >>
           command: |
-            SUCCESS=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/udapeople-migration-status-<< parameters.id >>)
+            SUCCESS=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/udapeople-migration-status-<< parameters.workflow_id >>)
             if(( $SUCCESS==1 ));
             then
               cd ./backend
