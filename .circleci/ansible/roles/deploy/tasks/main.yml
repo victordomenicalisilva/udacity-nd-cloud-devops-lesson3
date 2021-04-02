@@ -6,8 +6,9 @@
 
 - name: "Unzip files for project"
   become: true
-  shell: |
-    tar -xzvf /home/ubuntu/app/backend.tar.gz
+  unarchive:
+    src: /home/ubuntu/app/backend.tar.gz
+    dest: /home/ubuntu/app
 
 - name: "Start server"
   become: true
