@@ -2,26 +2,26 @@
 - name: "create app folder"
   become: true
   file:
-    path: ~/home/ubuntu/app/
+    path: /home/ubuntu/app/
     state: directory
 
 - name: "unzip backend files for udapeople"
   become: true
   unarchive:
     src: /root/project/backend.tar.gz
-    dest: ~/home/ubuntu/app/
+    dest: /home/ubuntu/app/
 
 - name: "install dependencies for udapeople backend"
   become: true
   command: npm install
   args:
-    chdir: ~/home/ubuntu/app/backend
+    chdir: /home/ubuntu/app/backend
 
 - name: "build udapeople backend"
   become: true
   command: npm run build
   args:
-    chdir: ~/home/ubuntu/app/backend
+    chdir: /home/ubuntu/app/backend
 
 - name: "start backend server"
   become: true
