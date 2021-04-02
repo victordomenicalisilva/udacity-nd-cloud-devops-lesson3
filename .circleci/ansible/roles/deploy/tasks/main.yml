@@ -1,5 +1,10 @@
 ---
-- name: "Unzip files for project"
+- name: "Create app folder"
+  become: true
+  file:
+    path: /home/ubuntu/app
+
+- name: "Unzip backend files for udapeople"
   become: true
   unarchive:
     src: /root/project/backend.tar.gz
