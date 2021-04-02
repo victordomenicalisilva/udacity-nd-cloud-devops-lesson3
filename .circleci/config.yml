@@ -261,8 +261,12 @@ jobs:
           command: |
             curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
             --request PUT --data "$MIGRATION_STATUS" $MEMSTASH_BASE_URL/udapeople-migration-status-${CIRCLE_SHA1:0:7}
-      - revert-migrations
-      - destroy-environment
+      - revert-migrations:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - destroy-environment:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
       - slack/notify:
           channel: circleci
           event: fail
