@@ -173,14 +173,6 @@ jobs:
               --tags project=udapeople-backend \
               --stack-name "udapeople-backend-${CIRCLE_SHA1:0:7}" \
               --parameter-overrides ID="${CIRCLE_SHA1:0:7}"
-      # - run:
-      #     name: Ensure front-end infrastructure exist
-      #     command: |
-      #       aws cloudformation deploy \
-      #         --template-file .circleci/files/frontend.yml \
-      #         --tags project=udapeople-frontend \
-      #         --stack-name "udapeople-frontend-${CIRCLE_SHA1:0:7}" \
-      #         --parameter-overrides ID="${CIRCLE_SHA1:0:7}"
       - run:
           name: Add back-end ip to ansible inventory
           command: |
@@ -200,10 +192,26 @@ jobs:
             --output text)
             curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
             --request PUT --data "$BACKEND_IP" ${MEMSTASH_BASE_URL}/udapeople-backend-ip-${CIRCLE_SHA1:0:7}
+      - run:
+          name: Add .env to backend
+          command: |
+            cd ./backend
+            touch .env
+            echo ENVIRONMENT=production
+            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> ./.env
+            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> ./.env
+            echo TYPEORM_HOST=$TYPEORM_HOST >> ./.env
+            echo TYPEORM_PORT=$TYPEORM_PORT >> ./.env
+            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> ./.env
+            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> ./.env
+            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> ./.env
+            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> ./.env
+            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> ./.env
       - persist_to_workspace:
-          root: ~/
+          root: ~/project
           paths:
-            - project/.circleci/ansible/inventory.txt
+            - .circleci/ansible/inventory.txt
+            - backend/
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
@@ -220,15 +228,16 @@ jobs:
       - add_ssh_keys:
           fingerprints: ["97:dd:06:8d:39:8c:f1:7b:b6:36:e0:51:0c:4d:78:f0"]
       - attach_workspace:
-          at: ~/
+          at: ~/project
       - run:
           name: Install dependencies
           command: |
-            apk add --update ansible
+            apk add --update ansible curl
+            pip install awscli
       - run:
           name: Configure server
           command: |
-            cd ~/project/.circleci/ansible/
+            cd .circleci/ansible/
             ansible-playbook -i inventory.txt configure-server.yml
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
@@ -243,22 +252,14 @@ jobs:
       - image: circleci/node:13.8.0
     steps:
       - checkout
+      - attach_workspace:
+          at: ~/project
+      - restore_cache:
+          keys: [backend-build]
       - run:
           name: Run migrations
           command: |
             cd ./backend
-            npm i
-            touch .env
-            echo ENVIRONMENT=production
-            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> ./.env
-            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> ./.env
-            echo TYPEORM_HOST=$TYPEORM_HOST >> ./.env
-            echo TYPEORM_PORT=$TYPEORM_PORT >> ./.env
-            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> ./.env
-            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> ./.env
-            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> ./.env
-            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> ./.env
-            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> ./.env
             touch migrationStatus.txt
             npm run migrations >> migrationStatus.txt
       - run:
@@ -291,9 +292,7 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            yum -y install tar gzip
-            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
-            yum -y install nodejs
+            yum -y install tar gzip nodejs npm curl
       - run:
           name: Get backend url
           command: |
@@ -327,34 +326,21 @@ jobs:
       - add_ssh_keys:
           fingerprints: ["97:dd:06:8d:39:8c:f1:7b:b6:36:e0:51:0c:4d:78:f0"]
       - attach_workspace:
-          at: ~/
+          at: ~/project
+      - restore_cache:
+          keys: [backend-build]
       - run:
           name: Install dependencies
           command: |
-            apk add --update ansible curl nodejs npm
+            apk add --update ansible curl nodejs npm curl openssh-client
       - run:
           name: Prepare backend
           command: |
-            cd ./backend
-            npm i
-            touch .env
-            echo ENVIRONMENT=production
-            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> ./.env
-            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> ./.env
-            echo TYPEORM_HOST=$TYPEORM_HOST >> ./.env
-            echo TYPEORM_PORT=$TYPEORM_PORT >> ./.env
-            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> ./.env
-            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> ./.env
-            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> ./.env
-            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> ./.env
-            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> ./.env
-            npm run build
-            cd ../
-            tar -czvf /root/project/backend.tar.gz backend/dist
+            tar -C backend -czvf backend.tar.gz .
       - run:
           name: Deploy backend
           command: |
-            cd ~/project/.circleci/ansible/
+            cd .circleci/ansible
             ansible-playbook -i inventory.txt deploy-backend.yml
       - revert-migrations:
           workflow_id: "${CIRCLE_SHA1:0:7}"
