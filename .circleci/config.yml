@@ -333,14 +333,19 @@ jobs:
 
   smoke-test:
     docker:
-      - image: "python:3.7-alpine3.11"
+      - image: python:3.7-alpine3.11
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
-            apk add --update curl
-            pip install awscli
+            apk add --no-cache \
+              curl \
+              python3 \
+              py3-pip \
+              && pip3 install --upgrade pip \
+              && pip3 install \
+              awscli
       - run:
           name: Get backend url and smoke test.
           command: |
