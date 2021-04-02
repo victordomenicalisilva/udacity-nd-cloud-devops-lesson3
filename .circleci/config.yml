@@ -331,7 +331,7 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            apk add --update ansible
+            apk add --update ansible nodejs npm
       - run:
           name: Prepare backend
           command: |
