@@ -2,7 +2,8 @@
 - name: "Create app folder"
   become: true
   file:
-    path: /home/ubuntu/app
+    path: /home/ubuntu/app/
+    state: directory
 
 - name: "Unzip backend files for udapeople"
   become: true
