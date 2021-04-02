@@ -46,6 +46,19 @@ commands:
               npm run migrations:revert
             fi
 
+  alert_slack_on_failure:
+    description: Notify slack channel on failure
+    parameters:
+      channel:
+        description: Slack channel to send slack notification
+        type: string
+        default: circleci
+    steps:
+      - slack/notify:
+          channel: << parameters.channel >>
+          event: fail
+          template: basic_fail_1
+
 jobs:
   build-frontend:
     docker:
@@ -63,10 +76,7 @@ jobs:
       - save_cache:
           paths: [frontend/node_modules]
           key: frontend-build
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   build-backend:
     docker:
@@ -84,10 +94,7 @@ jobs:
       - save_cache:
           paths: [backend/node_modules]
           key: backend-build
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   test-frontend:
     docker:
@@ -102,10 +109,7 @@ jobs:
             cd frontend
             npm install
             npm run test
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   test-backend:
     docker:
@@ -120,10 +124,7 @@ jobs:
             cd backend
             npm install
             npm run test
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   scan-frontend:
     docker:
@@ -137,10 +138,7 @@ jobs:
           command: |
             cd frontend
             npm audit --audit-level=critical
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   scan-backend:
     docker:
@@ -154,10 +152,7 @@ jobs:
           command: |
             cd backend
             npm audit --audit-level=critical
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   deploy-infrastructure:
     docker:
@@ -215,10 +210,7 @@ jobs:
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   configure-infrastructure:
     docker:
@@ -242,10 +234,7 @@ jobs:
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   run-migrations:
     docker:
@@ -279,10 +268,7 @@ jobs:
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   deploy-frontend:
     docker:
@@ -313,10 +299,7 @@ jobs:
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   deploy-backend:
     docker:
@@ -348,10 +331,7 @@ jobs:
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   smoke-test:
     docker:
@@ -384,10 +364,7 @@ jobs:
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
   cloudfront-update:
     docker:
@@ -436,10 +413,7 @@ jobs:
       - destroy-environment:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
-      - slack/notify:
-          channel: circleci
-          event: fail
-          template: basic_fail_1
+      - alert_slack_on_failure
 
 # cleanup:
 #   docker:
@@ -495,6 +469,7 @@ workflows:
       #     requires: [run-migrations]
       #     context: slack-secrets
       - deploy-backend:
+          # requires: [run-migrations]
           requires: [configure-infrastructure]
           context: slack-secrets
       # - smoke-test:
