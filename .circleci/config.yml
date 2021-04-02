@@ -259,12 +259,19 @@ jobs:
             echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> ./.env
             echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> ./.env
             echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> ./.env
-            export MIGRATION_STATUS=$(npm run migrations)
+            touch migrationStatus.txt
+            npm run migrations >> migrationStatus.txt
       - run:
           name: Send migration results to memstash
           command: |
-            curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
-            --request PUT --data "$MIGRATION_STATUS" $MEMSTASH_BASE_URL/udapeople-migration-status-${CIRCLE_SHA1:0:7}
+            if grep -q "has been executed successfully." ./backend/migrationStatus.txt
+              then
+              curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
+              --request PUT --data "1" $MEMSTASH_BASE_URL/udapeople-migration-status-${CIRCLE_SHA1:0:7}
+              else
+              curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
+              --request PUT --data "0" $MEMSTASH_BASE_URL/udapeople-migration-status-${CIRCLE_SHA1:0:7}
+            fi
       - revert-migrations:
           workflow_id: "${CIRCLE_SHA1:0:7}"
           event: on_fail
@@ -276,81 +283,177 @@ jobs:
           event: fail
           template: basic_fail_1
 
-  # deploy-frontend:
-  #   docker:
-  #     # Docker image here that supports AWS CLI
-  #   steps:
-  #     # Checkout code from git
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           # your code here
-  #     - run:
-  #         name: Get backend url
-  #         command: |
-  #           # your code here
-  #           export API_URL="http://${BACKEND_IP}:3030"
-  #           echo "${API_URL}"
-  #     - run:
-  #         name: Deploy frontend objects
-  #         command: |
-  #           # your code here
-  #     # Here's where you will add some code to rollback on failure
+  deploy-frontend:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            yum -y install tar gzip
+            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
+            yum -y install nodejs
+      - run:
+          name: Get backend url
+          command: |
+            BACKEND_IP=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/udapeople-backend-ip-${CIRCLE_SHA1:0:7})
+            cd ./frontend
+            touch ./.env
+            echo API_URL="http://${BACKEND_IP}:3030" >> ./.env
+      - run:
+          name: Deploy frontend objects
+          command: |
+            cd ./frontend
+            npm i
+            npm run build
+            aws s3 cp ./dist s3://udapeople-"${CIRCLE_SHA1:0:7}" --recursive
+      - revert-migrations:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - destroy-environment:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - slack/notify:
+          channel: circleci
+          event: fail
+          template: basic_fail_1
 
-  # deploy-backend:
-  #   docker:
-  #     # Docker image here that supports Ansible
-  #   steps:
-  #     # Checkout code from git
-  #     # Add ssh keys with fingerprint
-  #     # attach workspace
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           # your code here
-  #     - run:
-  #         name: Deploy backend
-  #         command: |
-  #           # your code here
-  #     # Here's where you will add some code to rollback on failure
+  deploy-backend:
+    docker:
+      - image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints: ["97:dd:06:8d:39:8c:f1:7b:b6:36:e0:51:0c:4d:78:f0"]
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update ansible
+      - run:
+          name: Prepare backend
+          command: |
+            cd ./backend
+            npm i
+            touch .env
+            echo ENVIRONMENT=production
+            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> ./.env
+            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> ./.env
+            echo TYPEORM_HOST=$TYPEORM_HOST >> ./.env
+            echo TYPEORM_PORT=$TYPEORM_PORT >> ./.env
+            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> ./.env
+            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> ./.env
+            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> ./.env
+            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> ./.env
+            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> ./.env
+            npm run build
+            cd ../
+            tar -czvf /root/project/backend.tar.gz backend/dist
+      - run:
+          name: Deploy backend
+          command: |
+            cd ~/project/.circleci/ansible/
+            ansible-playbook -i inventory.txt deploy-backend.yml
+      - revert-migrations:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - destroy-environment:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - slack/notify:
+          channel: circleci
+          event: fail
+          template: basic_fail_1
 
-  # smoke-test:
-  #   docker:
-  #     # Lightweight Docker image
-  #   steps:
-  #     # Checkout code from git
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           # your code here
-  #     - run:
-  #         name: Get backend url
-  #         command: |
-  #           # your code here
-  #     - run:
-  #         name: Backend smoke test.
-  #         command: |
-  #           # your code here
-  #     - run:
-  #         name: Frontend smoke test.
-  #         command: |
-  #           # your code here
-  #     # Here's where you will add some code to rollback on failure
+  smoke-test:
+    docker:
+      - image: "python:3.7-alpine3.11"
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update curl
+      - run:
+          name: Get backend url and smoke test.
+          command: |
+            BACKEND_IP=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/udapeople-backend-ip-${CIRCLE_SHA1:0:7})
+            BACKEND_URL=$BACKEND_IP:3030/api/status
+            curl -s $URL
+      - run:
+          name: Frontend smoke test.
+          command: |
+            URL="http://udapeople-${CIRCLE_SHA1:0:7}.s3-website-us-west-2.amazonaws.com"
+            if curl -s ${URL} | grep "Welcome"
+             then
+               return 1
+             else
+               return 0
+             fi
+      - revert-migrations:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - destroy-environment:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - slack/notify:
+          channel: circleci
+          event: fail
+          template: basic_fail_1
 
-  # cloudfront-update:
-  #   docker:
-  #     # Docker image here that supports AWS CLI
-  #   steps:
-  #     # Checkout code from git
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           # your code here
-  #     - run:
-  #         name: Update cloudfront distribution
-  #         command: |
-  #           # your code here
-  #     # Here's where you will add some code to rollback on failure
+  cloudfront-update:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            yum -y install tar gzip
+      - run:
+          name: Update cloudfront distribution
+          command: |
+            aws cloudformation list-exports \
+            --query "Exports[?Name=='WorkflowID'].Value" \
+            --no-paginate \
+            --output text > ./.circleci/ansible/originalWorkflowID.txt
+            if [ -s "./.circleci/ansible/originalWorkflowID.txt" ]
+            then
+              cat ./.circleci/ansible/originalWorkflowID.txt
+              originalWorkflowID=`cat ./.circleci/ansible/originalWorkflowID.txt`
+            else
+              echo "New stack will be created"
+            fi
+            if [ -n "$originalWorkflowID" ]
+            then
+              echo $originalWorkflowID
+              StackOption=update-stack
+              StackName=udapeople-$originalWorkflowID
+            else
+              StackOption=create-stack
+              StackName=udapeople-${CIRCLE_SHA1:0:7}
+            fi
+            aws cloudformation $StackOption \
+            --stack-name $StackName \
+            --template-body file://./.circleci/files/cloudfront.yml \
+            --parameter ParameterKey=WorkflowID,ParameterValue=${CIRCLE_SHA1:0:7} \
+            --tags Key=Name,Value=Udapeople-production-${CIRCLE_SHA1:0:7}
+      - persist_to_workspace:
+          root: .circleci/ansible/
+          paths:
+            - originalWorkflowID.txt
+      - revert-migrations:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - destroy-environment:
+          workflow_id: "${CIRCLE_SHA1:0:7}"
+          event: on_fail
+      - slack/notify:
+          channel: circleci
+          event: fail
+          template: basic_fail_1
 
 # cleanup:
 #   docker:
@@ -402,13 +505,17 @@ workflows:
       - run-migrations:
           requires: [configure-infrastructure]
           context: slack-secrets
-      # - deploy-frontend:
-      #     requires: [run-migrations]
-      # - deploy-backend:
-      #     requires: [run-migrations]
-      # - smoke-test:
-      #     requires: [deploy-backend, deploy-frontend]
-      # - cloudfront-update:
-      #     requires: [smoke-test]
+      - deploy-frontend:
+          requires: [run-migrations]
+          context: slack-secrets
+      - deploy-backend:
+          requires: [run-migrations]
+          context: slack-secrets
+      - smoke-test:
+          requires: [deploy-backend, deploy-frontend]
+          context: slack-secrets
+      - cloudfront-update:
+          requires: [smoke-test]
+          context: slack-secrets
       # - cleanup:
       #     requires: [cloudfront-update]

@@ -1,0 +1,17 @@
+---
+- name: "Copy files to EC2"
+  copy:
+    src: /root/project/backend.tar.gz
+    dest: /home/ubuntu/app
+
+- name: "Unzip files for project"
+  become: true
+  shell: |
+    cd /home/ubuntu/app
+    tar -xzvf /home/ubuntu/backend.tar.gz
+
+- name: "Start server"
+  become: true
+  command: pm2 start -f ./main.js
+  args:
+    chdir: /home/ubuntu/app
