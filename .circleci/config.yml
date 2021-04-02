@@ -190,10 +190,14 @@ jobs:
             --filters "Name=tag:Name,Values=backend-${CIRCLE_SHA1:0:7}" \
             --output text)
             echo $BACKEND_IP >> .circleci/ansible/inventory.txt
-      - run: echo $BACKEND_IP
       - run:
           name: Add back-end IP to MemStash
           command: |
+            export BACKEND_IP=$( \
+            aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:Name,Values=backend-${CIRCLE_SHA1:0:7}" \
+            --output text)
             curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
             --request PUT --data "$BACKEND_IP" ${MEMSTASH_BASE_URL}/udapeople-backend-ip-${CIRCLE_SHA1:0:7}
       - persist_to_workspace:
