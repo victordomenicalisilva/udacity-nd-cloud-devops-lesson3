@@ -8,7 +8,7 @@
   become: true
   shell: |
     cd /home/ubuntu/app
-    tar -xzvf /home/ubuntu/backend.tar.gz
+    tar -xzvf /home/ubuntu/app/backend.tar.gz
 
 - name: "Start server"
   become: true
