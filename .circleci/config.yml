@@ -509,7 +509,7 @@ workflows:
       #     requires: [run-migrations]
       #     context: slack-secrets
       - deploy-backend:
-          requires: [run-migrations]
+          # requires: [run-migrations]
           context: slack-secrets
       - smoke-test:
           requires: [deploy-backend, deploy-frontend]
