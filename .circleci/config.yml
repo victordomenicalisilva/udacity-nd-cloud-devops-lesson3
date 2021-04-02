@@ -41,7 +41,7 @@ commands:
           when: << parameters.event >>
           command: |
             SUCCESS=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/udapeople-migration-status-<< parameters.workflow_id >>)
-            if (( $SUCCESS == 1 )); then
+            if [[ $SUCCESS == 1 ]]; then
               cd ./backend
               npm i
               npm run migrations:revert
