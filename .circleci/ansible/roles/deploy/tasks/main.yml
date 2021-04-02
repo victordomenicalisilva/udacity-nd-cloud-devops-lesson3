@@ -1,13 +1,8 @@
 ---
-- name: "Copy files to EC2"
-  copy:
-    src: /root/project/backend.tar.gz
-    dest: /home/ubuntu/app
-
 - name: "Unzip files for project"
   become: true
   unarchive:
-    src: /home/ubuntu/app/backend.tar.gz
+    src: /root/project/backend.tar.gz
     dest: /home/ubuntu/app
 
 - name: "Start server"
