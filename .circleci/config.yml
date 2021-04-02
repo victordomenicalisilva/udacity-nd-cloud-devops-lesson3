@@ -41,8 +41,7 @@ commands:
           when: << parameters.event >>
           command: |
             SUCCESS=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/udapeople-migration-status-<< parameters.workflow_id >>)
-            if (($SUCCESS==1)); 
-            then
+            if (( $SUCCESS == 1 )); then
               cd ./backend
               npm i
               npm run migrations:revert
@@ -233,8 +232,15 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            apk add --update ansible curl
-            pip install awscli
+            apk add --no-cache \
+                curl \
+                ansible \
+                python3 \
+                py3-pip \
+                && pip3 install --upgrade pip \
+                && pip3 install \
+                awscli \
+                jq
       - run:
           name: Configure server
           command: |
@@ -316,8 +322,17 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            apk add --update ansible curl nodejs npm curl openssh-client
-            pip install awscli
+            apk add --no-cache \
+                curl \
+                ansible \
+                nodejs \
+                npm \
+                python3 \
+                py3-pip \
+                && pip3 install --upgrade pip \
+                && pip3 install \
+                awscli \
+                jq
       - run:
           name: Prepare backend
           command: |
@@ -345,7 +360,8 @@ jobs:
               py3-pip \
               && pip3 install --upgrade pip \
               && pip3 install \
-              awscli
+              awscli \
+              jq
       - run:
           name: Get backend url and smoke test.
           command: |
