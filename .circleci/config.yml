@@ -415,23 +415,23 @@ jobs:
       - destroy-environment
       - alert_slack_on_failure
 
-cleanup:
-  docker:
-    - image: amazon/aws-cli
-  steps:
-    - checkout
-    - run:
-        name: Install dependencies
-        command: |
-          curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
-          yum -y install nodejs npm
-    - destroy-environment:
-        name: Destroy Old Environment
-        workflow_id: '$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)'
-        event: always
-    - revert-migrations
-    - destroy-environment
-    - alert_slack_on_failure
+  cleanup:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
+            yum -y install nodejs npm
+      - destroy-environment:
+          name: Destroy Old Environment
+          workflow_id: '$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)'
+          event: always
+      - revert-migrations
+      - destroy-environment
+      - alert_slack_on_failure
 
 workflows:
   default:
