@@ -405,43 +405,38 @@ jobs:
       - run:
           name: Create Or Update cloudfront distribution
           command: |
-            OldWorkflowID=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)
-            if [ -z "$OldWorkflowID" ];
-              then
-                aws cloudformation create \
-                --stack-name udapeople-cloud-front \
-                --region $AWS_DEFAULT_REGION \
-                --template-file .circleci/files/cloudfront.yml \
-                --parameter-overrides WorkflowID=${CIRCLE_SHA1:0:7} \
-                --tags project=udapeople
-              else
-                aws cloudformation deploy \
-                --stack-name udapeople-cloud-front \
-                --region $AWS_DEFAULT_REGION \
-                --template-file .circleci/files/cloudfront.yml \
-                --parameter-overrides WorkflowID=${CIRCLE_SHA1:0:7} \
-                --tags project=udapeople
-            fi
+            aws cloudformation deploy \
+            --stack-name udapeople-cloud-front \
+            --region $AWS_DEFAULT_REGION \
+            --template-file .circleci/files/cloudfront.yml \
+            --parameter-overrides WorkflowID=${CIRCLE_SHA1:0:7} \
+            --tags project=udapeople
       - revert-migrations
       - destroy-environment
       - alert_slack_on_failure
 
-  # cleanup:
-  #   docker:
-  #     - image: amazon/aws-cli
-  #   steps:
-  #     - checkout
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
-  #           yum -y install nodejs npm
-  #     - destroy-environment:
-  #         workflow_id: '$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)'
-  #         event: always
-  #     - revert-migrations
-  #     - destroy-environment
-  #     - alert_slack_on_failure
+  cleanup:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
+            yum -y install nodejs npm
+      - run:
+          name: Destroy old Environment if exists
+          command: |
+            OldWorkflowID=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)
+            if [[ ! -z "$OldWorkflowID" ]]; then 
+              aws cloudformation delete-stack --stack-name udapeople-backend-$OldWorkflowID
+              aws s3 rm s3://udapeople-$OldWorkflowID --recursive
+              aws cloudformation delete-stack --stack-name udapeople-frontend-$OldWorkflowID
+            fi
+      - revert-migrations
+      - destroy-environment
+      - alert_slack_on_failure
 
 workflows:
   default:
@@ -486,5 +481,6 @@ workflows:
       - cloudfront-create-or-update:
           requires: [smoke-test]
           context: slack-secrets
-      # - cleanup:
-      #     requires: [cloudfront-update]
+      - cleanup:
+          requires: [cloudfront-update]
+          context: slack-secrets
