@@ -383,7 +383,7 @@ jobs:
       - destroy-environment
       - alert_slack_on_failure
 
-  cloudfront-update:
+  cloudfront-create-or-update:
     docker:
       - image: amazon/aws-cli
     steps:
@@ -397,40 +397,51 @@ jobs:
       - run:
           name: Store OldWorkflowID in memstash
           command: |
-            WorkflowID=$(aws cloudformation \
+            OldWorkflowID=$(aws cloudformation \
               list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
               --no-paginate --output text)
             curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
-              --request PUT --data "$WorkflowID" $MEMSTASH_BASE_URL/old-workflow-id
+              --request PUT --data "$OldWorkflowID" $MEMSTASH_BASE_URL/old-workflow-id
       - run:
-          name: Update cloudfront distribution
+          name: Create Or Update cloudfront distribution
           command: |
-            aws cloudformation deploy \
-            --stack-name udapeople-cloud-front-${CIRCLE_SHA1:0:7} \
-            --region $AWS_DEFAULT_REGION \
-            --template-file .circleci/files/cloudfront.yml \
-            --parameter-overrides WorkflowID=${CIRCLE_SHA1:0:7} \
-            --tags project=udapeople
+            OldWorkflowID=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)
+            if [ -z "$OldWorkflowID" ];
+              then
+                aws cloudformation create \
+                --stack-name udapeople-cloud-front \
+                --region $AWS_DEFAULT_REGION \
+                --template-file .circleci/files/cloudfront.yml \
+                --parameter-overrides WorkflowID=${CIRCLE_SHA1:0:7} \
+                --tags project=udapeople
+              else
+                aws cloudformation deploy \
+                --stack-name udapeople-cloud-front \
+                --region $AWS_DEFAULT_REGION \
+                --template-file .circleci/files/cloudfront.yml \
+                --parameter-overrides WorkflowID=${CIRCLE_SHA1:0:7} \
+                --tags project=udapeople
+            fi
       - revert-migrations
       - destroy-environment
       - alert_slack_on_failure
 
-  cleanup:
-    docker:
-      - image: amazon/aws-cli
-    steps:
-      - checkout
-      - run:
-          name: Install dependencies
-          command: |
-            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
-            yum -y install nodejs npm
-      - destroy-environment:
-          workflow_id: '$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)'
-          event: always
-      - revert-migrations
-      - destroy-environment
-      - alert_slack_on_failure
+  # cleanup:
+  #   docker:
+  #     - image: amazon/aws-cli
+  #   steps:
+  #     - checkout
+  #     - run:
+  #         name: Install dependencies
+  #         command: |
+  #           curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
+  #           yum -y install nodejs npm
+  #     - destroy-environment:
+  #         workflow_id: '$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)'
+  #         event: always
+  #     - revert-migrations
+  #     - destroy-environment
+  #     - alert_slack_on_failure
 
 workflows:
   default:
@@ -475,5 +486,5 @@ workflows:
       - cloudfront-update:
           requires: [smoke-test]
           context: slack-secrets
-      - cleanup:
-          requires: [cloudfront-update]
+      # - cleanup:
+      #     requires: [cloudfront-update]
