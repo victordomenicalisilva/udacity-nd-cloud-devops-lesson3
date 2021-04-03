@@ -383,73 +383,56 @@ jobs:
       - destroy-environment
       - alert_slack_on_failure
 
-  # cloudfront-update:
-  #   docker:
-  #     - image: amazon/aws-cli
-  #   steps:
-  #     - checkout
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           yum -y install tar gzip
-  #     - run:
-  #         name: Update cloudfront distribution
-  #         command: |
-  #           aws cloudformation list-exports \
-  #           --query "Exports[?Name=='WorkflowID'].Value" \
-  #           --no-paginate \
-  #           --output text > ./.circleci/ansible/originalWorkflowID.txt
-  #           if [ -s "./.circleci/ansible/originalWorkflowID.txt" ]
-  #           then
-  #             cat ./.circleci/ansible/originalWorkflowID.txt
-  #             originalWorkflowID=`cat ./.circleci/ansible/originalWorkflowID.txt`
-  #           else
-  #             echo "New stack will be created"
-  #           fi
-  #           if [ -n "$originalWorkflowID" ]
-  #           then
-  #             echo $originalWorkflowID
-  #             StackOption=update-stack
-  #             StackName=udapeople-$originalWorkflowID
-  #           else
-  #             StackOption=create-stack
-  #             StackName=udapeople-${CIRCLE_SHA1:0:7}
-  #           fi
-  #           aws cloudformation $StackOption \
-  #           --stack-name $StackName \
-  #           --template-body file://./.circleci/files/cloudfront.yml \
-  #           --parameter ParameterKey=WorkflowID,ParameterValue=${CIRCLE_SHA1:0:7} \
-  #           --tags Key=Name,Value=Udapeople-production-${CIRCLE_SHA1:0:7}
-  #     - persist_to_workspace:
-  #         root: .circleci/ansible/
-  #         paths:
-  #           - originalWorkflowID.txt
-  #     - revert-migrations:
-  #         workflow_id: "${CIRCLE_SHA1:0:7}"
-  #         event: on_fail
-  #     - destroy-environment:
-  #         workflow_id: "${CIRCLE_SHA1:0:7}"
-  #         event: on_fail
-  #     - alert_slack_on_failure
+  cloudfront-update:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            yum install -y curl jq
+      - run:
+          name: Store OldWorkflowID in memstash
+          command: |
+            WorkflowID=$(aws cloudformation \
+              list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
+              --no-paginate --output text)
+            curl -H "Content-Type: text/plain" -H "token: $MEMSTASH_TOKEN" \
+              --request PUT --data "$WorkflowID" $MEMSTASH_BASE_URL/old-workflow-id
+      - run:
+          name: Update cloudfront distribution
+          command: |
+            aws cloudformation deploy \
+            --stack-name udapeople-cloud-front-${CIRCLE_SHA1:0:7} \
+            --region $AWS_DEFAULT_REGION \
+            --template-file .circleci/files/cloudfront.yml \
+            --parameter-overrides WorkflowID=${CIRCLE_SHA1:0:7} \
+            --tags project=udapeople
+      - revert-migrations
+      - destroy-environment
+      - alert_slack_on_failure
 
-# cleanup:
-#   docker:
-#     # Docker image here
-#   steps:
-#     # Checkout code from git
-#     - run:
-#         name: Get old stack workflow id
-#         command: |
-#           # your code here
-#           export OldWorkflowID="the id here"
-#           export STACKS=[] #put the list of stacks here
-#     - run:
-#         name: Remove old stacks and files
-#         command: |
-#           if [[ "${STACKS[@]}" =~ "${OldWorkflowID}" ]]
-#           then
-#             # your code here
-#           fi
+cleanup:
+  docker:
+    - image: amazon/aws-cli
+  steps:
+    - checkout
+    - run:
+        name: Get old stack workflow id
+        command: |
+          export OldWorkflowID=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)
+          export STACKS=($(aws cloudformation list-stacks --query "StackSummaries[*].StackName" \
+          --stack-status-filter CREATE_COMPLETE --no-paginate --output text))
+          echo $OldWorkflowID
+          echo $STACKS
+    # - run:
+    #     name: Remove old stacks and files
+    #     command: |
+    #       if [[ "${STACKS[@]}" =~ "${OldWorkflowID}" ]]
+    #       then
+    #         # your code here
+    #       fi
 
 workflows:
   default:
