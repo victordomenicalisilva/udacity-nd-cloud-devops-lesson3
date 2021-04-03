@@ -426,7 +426,6 @@ jobs:
             curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
             yum -y install nodejs npm
       - destroy-environment:
-          name: Destroy Old Environment
           workflow_id: '$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)'
           event: always
       - revert-migrations
