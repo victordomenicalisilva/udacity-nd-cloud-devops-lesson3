@@ -483,7 +483,7 @@ workflows:
       - smoke-test:
           requires: [deploy-backend, deploy-frontend]
           context: slack-secrets
-      - cloudfront-update:
+      - cloudfront-create-or-update:
           requires: [smoke-test]
           context: slack-secrets
       # - cleanup:
