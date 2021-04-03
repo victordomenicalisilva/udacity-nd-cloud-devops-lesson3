@@ -391,7 +391,9 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            yum install -y curl jq
+            yum install -y curl jq npm
+            curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
+            yum -y install nodejs
       - run:
           name: Store OldWorkflowID in memstash
           command: |
@@ -419,20 +421,17 @@ cleanup:
   steps:
     - checkout
     - run:
-        name: Get old stack workflow id
+        name: Install dependencies
         command: |
-          export OldWorkflowID=$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)
-          export STACKS=($(aws cloudformation list-stacks --query "StackSummaries[*].StackName" \
-          --stack-status-filter CREATE_COMPLETE --no-paginate --output text))
-          echo $OldWorkflowID
-          echo $STACKS
-    # - run:
-    #     name: Remove old stacks and files
-    #     command: |
-    #       if [[ "${STACKS[@]}" =~ "${OldWorkflowID}" ]]
-    #       then
-    #         # your code here
-    #       fi
+          curl -sL https://rpm.nodesource.com/setup_lts.x | bash -
+          yum -y install nodejs npm
+    - destroy-environment:
+        name: Destroy Old Environment
+        workflow_id: '$(curl -H "token: $MEMSTASH_TOKEN" --request GET $MEMSTASH_BASE_URL/old-workflow-id)'
+        event: always
+    - revert-migrations
+    - destroy-environment
+    - alert_slack_on_failure
 
 workflows:
   default:
@@ -477,5 +476,5 @@ workflows:
       - cloudfront-update:
           requires: [smoke-test]
           context: slack-secrets
-      # - cleanup:
-      #     requires: [cloudfront-update]
+      - cleanup:
+          requires: [cloudfront-update]
