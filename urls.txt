@@ -9,3 +9,6 @@ https://d2tz10pkh4onu2.cloudfront.net
 
 [URL04]
 http://ec2-54-82-70-212.compute-1.amazonaws.com:3030
+
+[URL05]
+http://ec2-34-205-139-5.compute-1.amazonaws.com:9090
