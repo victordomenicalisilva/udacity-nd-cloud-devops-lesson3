@@ -5,7 +5,7 @@ https://github.com/victordomenicalisilva/udacity-nd-cloud-devops-lesson3
 http://udapeople-93689fa.s3-website-us-east-1.amazonaws.com
 
 [URL03]
-https://d2tz10pkh4onu2.cloudfront.net
+http://d2tz10pkh4onu2.cloudfront.net
 
 [URL04]
 http://ec2-100-25-141-54.compute-1.amazonaws.com:3030
